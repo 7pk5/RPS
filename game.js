@@ -10,39 +10,49 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
 // ─── DOM References ─── //
-const video          = document.getElementById("camera-feed");
-const canvas         = document.getElementById("landmark-canvas");
-const ctx            = canvas.getContext("2d");
-const gestureIcon    = document.getElementById("gesture-icon");
-const gestureLabel   = document.getElementById("gesture-label");
+const video = document.getElementById("camera-feed");
+const canvas = document.getElementById("landmark-canvas");
+const ctx = canvas.getContext("2d");
+const gestureIcon = document.getElementById("gesture-icon");
+const gestureLabel = document.getElementById("gesture-label");
 const countdownOverlay = document.getElementById("countdown-overlay");
-const countdownText  = document.getElementById("countdown-text");
-const playBtn        = document.getElementById("play-btn");
-const resetBtn       = document.getElementById("reset-btn");
-const resultPanel    = document.getElementById("result-panel");
-const resultHumanEmoji   = document.getElementById("result-human-emoji");
+const countdownText = document.getElementById("countdown-text");
+const playBtn = document.getElementById("play-btn");
+const resetBtn = document.getElementById("reset-btn");
+const resultPanel = document.getElementById("result-panel");
+const resultHumanEmoji = document.getElementById("result-human-emoji");
 const resultHumanGesture = document.getElementById("result-human-gesture");
-const resultAiEmoji      = document.getElementById("result-ai-emoji");
-const resultAiGesture    = document.getElementById("result-ai-gesture");
-const resultOutcome      = document.getElementById("result-outcome");
-const humanScoreEl   = document.getElementById("human-score");
-const aiScoreEl      = document.getElementById("ai-score");
-const roundNumberEl  = document.getElementById("round-number");
-const logList        = document.getElementById("log-list");
-const logEmpty       = document.getElementById("log-empty");
+const resultAiEmoji = document.getElementById("result-ai-emoji");
+const resultAiGesture = document.getElementById("result-ai-gesture");
+const resultOutcome = document.getElementById("result-outcome");
+const humanScoreEl = document.getElementById("human-score");
+const aiScoreEl = document.getElementById("ai-score");
+const roundNumberEl = document.getElementById("round-number");
+const logList = document.getElementById("log-list");
+const logEmpty = document.getElementById("log-empty");
 const cameraPlaceholder = document.getElementById("camera-placeholder");
 
 // ─── State ─── //
 let handLandmarker = null;
-let lastVideoTime  = -1;
+let lastVideoTime = -1;
 let currentGesture = "None";
-let humanScore     = 0;
-let aiScore        = 0;
-let roundNumber    = 1;
-let isPlaying      = false;   // true while countdown is active
+let humanScore = 0;
+let aiScore = 0;
+let roundNumber = 1;
+let isPlaying = false;   // true while countdown is active
 
 const GESTURE_EMOJI = { Rock: "✊", Paper: "✋", Scissors: "✌️", None: "❓" };
 const MOVES = ["Rock", "Paper", "Scissors"];
+
+// ─── Voice (Web Speech API) ─── //
+
+function speak(text, rate = 1.1) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.volume = 1;      // max volume
+  utter.rate = rate;
+  utter.pitch = 1.05;
+  speechSynthesis.speak(utter);
+}
 
 // ─── MediaPipe Initialisation ─── //
 
@@ -78,7 +88,7 @@ async function enableCamera() {
 
   return new Promise((resolve) => {
     video.onloadedmetadata = () => {
-      canvas.width  = video.videoWidth;
+      canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       cameraPlaceholder.classList.add("hidden");
       resolve();
@@ -109,10 +119,10 @@ function classifyGesture(landmarks) {
   // helper: is finger extended? (for index/middle/ring/pinky)
   const isExtended = (tipIdx, pipIdx) => lm[tipIdx].y < lm[pipIdx].y;
 
-  const indexUp  = isExtended(8,  6);
+  const indexUp = isExtended(8, 6);
   const middleUp = isExtended(12, 10);
-  const ringUp   = isExtended(16, 14);
-  const pinkyUp  = isExtended(20, 18);
+  const ringUp = isExtended(16, 14);
+  const pinkyUp = isExtended(20, 18);
 
   // Thumb: compare tip X distance from wrist vs MCP X distance from wrist
   const thumbTipDist = Math.abs(lm[4].x - lm[0].x);
@@ -171,7 +181,7 @@ function detectLoop() {
     }
 
     // Update live badge
-    gestureIcon.textContent  = GESTURE_EMOJI[currentGesture] || "❓";
+    gestureIcon.textContent = GESTURE_EMOJI[currentGesture] || "❓";
     gestureLabel.textContent = currentGesture === "None" ? "No hand" : currentGesture;
   }
 
@@ -187,23 +197,23 @@ function getAiMove() {
 function determineWinner(human, ai) {
   if (human === ai) return "draw";
   if (
-    (human === "Rock"     && ai === "Scissors") ||
-    (human === "Paper"    && ai === "Rock") ||
+    (human === "Rock" && ai === "Scissors") ||
+    (human === "Paper" && ai === "Rock") ||
     (human === "Scissors" && ai === "Paper")
   ) return "win";
   return "lose";
 }
 
 function showResult(humanMove, aiMove, result) {
-  resultHumanEmoji.textContent   = GESTURE_EMOJI[humanMove];
+  resultHumanEmoji.textContent = GESTURE_EMOJI[humanMove];
   resultHumanGesture.textContent = humanMove;
-  resultAiEmoji.textContent      = GESTURE_EMOJI[aiMove];
-  resultAiGesture.textContent    = aiMove;
+  resultAiEmoji.textContent = GESTURE_EMOJI[aiMove];
+  resultAiGesture.textContent = aiMove;
 
   resultOutcome.className = "result-outcome " + result;
-  if (result === "win")       resultOutcome.textContent = "🎉 You Win!";
+  if (result === "win") resultOutcome.textContent = "🎉 You Win!";
   else if (result === "lose") resultOutcome.textContent = "💀 AI Wins!";
-  else                        resultOutcome.textContent = "🤝 Draw!";
+  else resultOutcome.textContent = "🤝 Draw!";
 
   resultPanel.classList.remove("hidden");
   // Re-trigger animation
@@ -221,32 +231,36 @@ function addLogEntry(humanMove, aiMove, result) {
 }
 
 function updateScores(result) {
-  if (result === "win")  humanScore++;
+  if (result === "win") humanScore++;
   if (result === "lose") aiScore++;
   humanScoreEl.textContent = humanScore;
-  aiScoreEl.textContent    = aiScore;
+  aiScoreEl.textContent = aiScore;
   roundNumber++;
   roundNumberEl.textContent = roundNumber;
 }
 
 // ─── Countdown & Play ─── //
 
-function countdown(seconds) {
+function countdown() {
+  const words = ["Stone", "Paper", "Scissors"];
   return new Promise((resolve) => {
-    let remaining = seconds;
+    let step = 0;
     countdownOverlay.classList.remove("hidden");
-    countdownText.textContent = remaining;
+    countdownText.textContent = words[step];
+    speak(words[step] + "!", 1.0);
 
     const tick = () => {
-      remaining--;
-      if (remaining > 0) {
-        countdownText.textContent = remaining;
+      step++;
+      if (step < words.length) {
+        countdownText.textContent = words[step];
+        speak(words[step] + "!", 1.0);
         // re-trigger pop animation
         countdownText.style.animation = "none";
         requestAnimationFrame(() => { countdownText.style.animation = ""; });
-        setTimeout(tick, 800);
+        setTimeout(tick, 900);
       } else {
-        countdownText.textContent = "GO!";
+        countdownText.textContent = "SHOOT!";
+        speak("Shoot!", 1.2);
         countdownText.style.animation = "none";
         requestAnimationFrame(() => { countdownText.style.animation = ""; });
         setTimeout(() => {
@@ -256,7 +270,7 @@ function countdown(seconds) {
       }
     };
 
-    setTimeout(tick, 800);
+    setTimeout(tick, 900);
   });
 }
 
@@ -266,7 +280,7 @@ async function playRound() {
   playBtn.disabled = true;
   resultPanel.classList.add("hidden");
 
-  await countdown(3);
+  await countdown();
 
   // Capture gesture at the moment "GO!" fires
   const humanMove = currentGesture === "None" ? null : currentGesture;
@@ -275,10 +289,10 @@ async function playRound() {
     // No valid gesture detected
     resultOutcome.className = "result-outcome draw";
     resultOutcome.textContent = "❌ No gesture detected — try again!";
-    resultHumanEmoji.textContent   = "❓";
+    resultHumanEmoji.textContent = "❓";
     resultHumanGesture.textContent = "None";
-    resultAiEmoji.textContent      = "—";
-    resultAiGesture.textContent    = "—";
+    resultAiEmoji.textContent = "—";
+    resultAiGesture.textContent = "—";
     resultPanel.classList.remove("hidden");
     resultPanel.style.animation = "none";
     requestAnimationFrame(() => { resultPanel.style.animation = ""; });
@@ -290,6 +304,14 @@ async function playRound() {
   const aiMove = getAiMove();
   const result = determineWinner(humanMove, aiMove);
 
+  // Voice announcements
+  speak(humanMove + "!");
+  setTimeout(() => speak("versus " + aiMove + "!"), 600);
+  const outcomeText = result === "win" ? "You win!"
+    : result === "lose" ? "A I wins!"
+      : "It's a draw!";
+  setTimeout(() => speak(outcomeText), 1400);
+
   showResult(humanMove, aiMove, result);
   addLogEntry(humanMove, aiMove, result);
   updateScores(result);
@@ -299,11 +321,11 @@ async function playRound() {
 }
 
 function resetGame() {
-  humanScore  = 0;
-  aiScore     = 0;
+  humanScore = 0;
+  aiScore = 0;
   roundNumber = 1;
-  humanScoreEl.textContent  = "0";
-  aiScoreEl.textContent     = "0";
+  humanScoreEl.textContent = "0";
+  aiScoreEl.textContent = "0";
   roundNumberEl.textContent = "1";
   logList.innerHTML = "";
   logEmpty.style.display = "";
