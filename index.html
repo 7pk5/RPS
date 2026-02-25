@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rock Paper Scissors — Hand Gesture Game</title>
+  <meta name="description" content="Play Rock, Paper, Scissors against an AI using real-time hand gesture recognition powered by MediaPipe." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+  <!-- ─── Background Particles ─── -->
+  <div class="bg-particles" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <!-- ─── Header ─── -->
+  <header id="app-header">
+    <h1>✊ ✋ ✌️ <span class="gradient-text">RPS Arena</span></h1>
+    <p class="subtitle">Show your hand — the AI is watching</p>
+  </header>
+
+  <!-- ─── Main Game Area ─── -->
+  <main id="game-area">
+
+    <!-- Scoreboard -->
+    <section id="scoreboard" class="glass-card">
+      <div class="score-col human-score">
+        <span class="score-label">You</span>
+        <span class="score-value" id="human-score">0</span>
+      </div>
+      <div class="score-col round-info">
+        <span class="score-label">Round</span>
+        <span class="score-value" id="round-number">1</span>
+      </div>
+      <div class="score-col ai-score">
+        <span class="score-label">AI</span>
+        <span class="score-value" id="ai-score">0</span>
+      </div>
+    </section>
+
+    <!-- Camera + Canvas viewport -->
+    <section id="camera-viewport">
+      <video id="camera-feed" autoplay playsinline muted></video>
+      <canvas id="landmark-canvas"></canvas>
+
+      <!-- Live gesture badge -->
+      <div id="live-gesture" class="glass-badge">
+        <span id="gesture-icon">🤚</span>
+        <span id="gesture-label">Waiting…</span>
+      </div>
+
+      <!-- Countdown overlay -->
+      <div id="countdown-overlay" class="hidden">
+        <span id="countdown-text"></span>
+      </div>
+
+      <!-- Camera-off placeholder -->
+      <div id="camera-placeholder">
+        <div class="placeholder-content">
+          <span class="placeholder-icon">📷</span>
+          <p>Camera feed will appear here</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section id="controls">
+      <button id="play-btn" class="primary-btn" disabled>
+        <span class="btn-icon">🎮</span> Play Round
+      </button>
+      <button id="reset-btn" class="secondary-btn">
+        <span class="btn-icon">🔄</span> Reset
+      </button>
+    </section>
+
+    <!-- Result Panel -->
+    <section id="result-panel" class="glass-card hidden">
+      <div class="result-moves">
+        <div class="result-move human-move">
+          <span class="result-emoji" id="result-human-emoji">✊</span>
+          <span class="result-name">You</span>
+          <span class="result-gesture" id="result-human-gesture">Rock</span>
+        </div>
+        <div class="result-vs">VS</div>
+        <div class="result-move ai-move">
+          <span class="result-emoji" id="result-ai-emoji">✋</span>
+          <span class="result-name">AI</span>
+          <span class="result-gesture" id="result-ai-gesture">Paper</span>
+        </div>
+      </div>
+      <div id="result-outcome" class="result-outcome">Draw!</div>
+    </section>
+
+    <!-- Game Log -->
+    <section id="game-log" class="glass-card">
+      <h2>Match History</h2>
+      <ul id="log-list"></ul>
+      <p id="log-empty" class="log-empty">No rounds played yet.</p>
+    </section>
+  </main>
+
+  <!-- ─── Footer ─── -->
+  <footer id="app-footer">
+    <p>Powered by <a href="https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker" target="_blank" rel="noopener">MediaPipe Hand Landmarker</a></p>
+  </footer>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
