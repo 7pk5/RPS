@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RPS Arena</string>
+    <string name="title_you">You</string>
+    <string name="title_ai">AI</string>
+    <string name="title_round">Round</string>
+    <string name="play_round">Play Round</string>
+    <string name="reset">Reset</string>
+    <string name="match_history">Match History</string>
+    <string name="round_result">Round Result</string>
+    <string name="vs">VS</string>
+    <string name="waiting">Waiting…</string>
+    <string name="no_rounds">No rounds played yet.</string>
+    <string name="camera_starting">Camera starting…</string>
+    <string name="subtitle">Show your hand — the AI is watching</string>
+    <string name="you_win">🎉 You Win!</string>
+    <string name="ai_wins">💀 AI Wins!</string>
+    <string name="draw">🤝 Draw!</string>
+    <string name="no_gesture">❌ No gesture detected — try again!</string>
+    <string name="shoot">SHOOT!</string>
+</resources>

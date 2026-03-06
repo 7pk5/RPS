@@ -17,6 +17,8 @@ const gestureIcon = document.getElementById("gesture-icon");
 const gestureLabel = document.getElementById("gesture-label");
 const countdownOverlay = document.getElementById("countdown-overlay");
 const countdownText = document.getElementById("countdown-text");
+const aiLiveHand = document.getElementById("ai-live-hand");
+const aiCycleEmojis = ["✊", "✋", "✌️"];
 const playBtn = document.getElementById("play-btn");
 const resetBtn = document.getElementById("reset-btn");
 const resultPanel = document.getElementById("result-panel");
@@ -44,15 +46,7 @@ let isPlaying = false;   // true while countdown is active
 const GESTURE_EMOJI = { Rock: "✊", Paper: "✋", Scissors: "✌️", None: "❓" };
 const MOVES = ["Rock", "Paper", "Scissors"];
 
-// ─── Voice (Web Speech API) ─── //
 
-function speak(text, rate = 1.1) {
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.volume = 1;      // max volume
-  utter.rate = rate;
-  utter.pitch = 1.05;
-  speechSynthesis.speak(utter);
-}
 
 // ─── MediaPipe Initialisation ─── //
 
@@ -241,32 +235,50 @@ function updateScores(result) {
 
 // ─── Countdown & Play ─── //
 
-function countdown() {
+function countdown(finalAiMove) {
   const words = ["Stone", "Paper", "Scissors"];
   return new Promise((resolve) => {
     let step = 0;
+
+    // Reset overlay state
     countdownOverlay.classList.remove("hidden");
+
+    // Start fast cycling animation for AI hand during words
+    aiLiveHand.classList.add("cycling");
+
     countdownText.textContent = words[step];
-    speak(words[step] + "!", 1.0);
+
+
+    // Fast cycle interval during countdown
+    let cycleCount = 0;
+    const cycleInterval = setInterval(() => {
+      aiLiveHand.textContent = aiCycleEmojis[cycleCount % aiCycleEmojis.length];
+      cycleCount++;
+    }, 150);
 
     const tick = () => {
       step++;
       if (step < words.length) {
         countdownText.textContent = words[step];
-        speak(words[step] + "!", 1.0);
+
         // re-trigger pop animation
         countdownText.style.animation = "none";
         requestAnimationFrame(() => { countdownText.style.animation = ""; });
         setTimeout(tick, 900);
       } else {
+        // Stop spinning and reveal actual AI move!
+        clearInterval(cycleInterval);
+        aiLiveHand.classList.remove("cycling");
+        aiLiveHand.textContent = GESTURE_EMOJI[finalAiMove];
+
         countdownText.textContent = "SHOOT!";
-        speak("Shoot!", 1.2);
+
         countdownText.style.animation = "none";
         requestAnimationFrame(() => { countdownText.style.animation = ""; });
         setTimeout(() => {
           countdownOverlay.classList.add("hidden");
           resolve();
-        }, 500);
+        }, 1200); // give enough time to see the AI's play alongside SHOOT!
       }
     };
 
@@ -280,13 +292,16 @@ async function playRound() {
   playBtn.disabled = true;
   resultPanel.classList.add("hidden");
 
-  await countdown();
+  // Determine AI move BEFORE countdown so we can sync it inside the countdown
+  const aiMove = getAiMove();
+  await countdown(aiMove);
 
-  // Capture gesture at the moment "GO!" fires
+  // Capture gesture at the moment "SHOOT!" finishes
   const humanMove = currentGesture === "None" ? null : currentGesture;
 
   if (!humanMove) {
     // No valid gesture detected
+
     resultOutcome.className = "result-outcome draw";
     resultOutcome.textContent = "❌ No gesture detected — try again!";
     resultHumanEmoji.textContent = "❓";
@@ -301,16 +316,11 @@ async function playRound() {
     return;
   }
 
-  const aiMove = getAiMove();
+
+
   const result = determineWinner(humanMove, aiMove);
 
-  // Voice announcements
-  speak(humanMove + "!");
-  setTimeout(() => speak("versus " + aiMove + "!"), 600);
-  const outcomeText = result === "win" ? "You win!"
-    : result === "lose" ? "A I wins!"
-      : "It's a draw!";
-  setTimeout(() => speak(outcomeText), 1400);
+
 
   showResult(humanMove, aiMove, result);
   addLogEntry(humanMove, aiMove, result);
@@ -347,5 +357,16 @@ resetBtn.addEventListener("click", resetGame);
   } catch (err) {
     console.error("[RPS] Initialisation error:", err);
     gestureLabel.textContent = "Error — see console";
+
+    // Display error visibly on screen for mobile users
+    cameraPlaceholder.classList.remove("hidden");
+    cameraPlaceholder.innerHTML = `
+      <div class="placeholder-content" style="color: #f43f5e; padding: 1rem;">
+        <span class="placeholder-icon">⚠️</span>
+        <p style="font-weight: 700; margin-bottom: 0.5rem;">Camera Error</p>
+        <p style="font-size: 0.8rem; word-break: break-all;">${err.message || err}</p>
+        <p style="font-size: 0.8rem; margin-top: 1rem; color: #94a3b8;">Please ensure the app has Camera permissions allowed in settings.</p>
+      </div>
+    `;
   }
 })();

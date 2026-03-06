@@ -1,3 +1,8 @@
 node_modules/
 .DS_Store
 *.log
+*.apk
+rps-android/android/.gradle/
+rps-android/android/app/build/
+rps-android/android/build/
+rps-android/android/local.properties
