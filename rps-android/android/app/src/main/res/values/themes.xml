@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App Theme - Dark Material Design -->
     <style name="Theme.RPSArena" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/md_theme_dark_primary</item>
-        <item name="colorOnPrimary">@color/md_theme_dark_onPrimary</item>
+        <item name="colorPrimary">@color/accent_primary</item>
+        <item name="colorOnPrimary">@color/white</item>
         <item name="colorPrimaryDark">@color/status_bar</item>
         <item name="android:colorBackground">@color/bg_primary</item>
-        <item name="colorSurface">@color/md_theme_dark_surface</item>
+        <item name="colorSurface">@color/surface</item>
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:statusBarColor">@color/status_bar</item>
         <item name="android:navigationBarColor">@color/bg_primary</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

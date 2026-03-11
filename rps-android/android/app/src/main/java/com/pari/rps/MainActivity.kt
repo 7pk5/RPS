@@ -4,10 +4,19 @@ import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
+import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -39,6 +48,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "RPSArena"
         private const val MODEL_ASSET = "hand_landmarker.task"
+        private const val STABILIZE_FRAMES = 4
+        private const val FRAME_INTERVAL_MS = 67L
     }
 
     // Views
@@ -59,25 +70,42 @@ class MainActivity : AppCompatActivity() {
     private lateinit var countdownOverlay: FrameLayout
     private lateinit var tvCountdown: TextView
     private lateinit var tvAiHand: TextView
+    private lateinit var tvHoldGesture: TextView
     private lateinit var tvLogEmpty: TextView
     private lateinit var rvLog: RecyclerView
+    private lateinit var cameraBorderFlash: View
+    private lateinit var tvCameraHint: TextView
 
     // State
     private var handLandmarker: HandLandmarker? = null
-    private var currentGesture = HandGestureClassifier.Gesture.NONE
+    private var rawGesture = HandGestureClassifier.Gesture.NONE
+    private var stableGesture = HandGestureClassifier.Gesture.NONE
+    private var gestureStreakCount = 0
     private var humanScore = 0
     private var aiScore = 0
     private var roundNumber = 1
     private var isPlaying = false
+    private var isCountingDown = false
+    private var cameraReady = false
+    private var capturedGesture: HandGestureClassifier.Gesture? = null
+    private var gestureAtPlayTap: HandGestureClassifier.Gesture? = null
 
     private val logAdapter = LogAdapter()
     private val handler = Handler(Looper.getMainLooper())
     private val cameraExecutor = Executors.newSingleThreadExecutor()
 
-    // AI cycling emojis for countdown animation
     private val aiCycleEmojis = listOf("✊", "✋", "✌️")
 
-    // Permission launcher
+    private val vibrator: Vibrator by lazy {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val mgr = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            mgr.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+    }
+
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -117,8 +145,11 @@ class MainActivity : AppCompatActivity() {
         countdownOverlay = findViewById(R.id.countdownOverlay)
         tvCountdown = findViewById(R.id.tvCountdown)
         tvAiHand = findViewById(R.id.tvAiHand)
+        tvHoldGesture = findViewById(R.id.tvHoldGesture)
         tvLogEmpty = findViewById(R.id.tvLogEmpty)
         rvLog = findViewById(R.id.rvLog)
+        cameraBorderFlash = findViewById(R.id.cameraBorderFlash)
+        tvCameraHint = findViewById(R.id.tvCameraHint)
     }
 
     private fun setupRecyclerView() {
@@ -127,8 +158,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        btnPlay.setOnClickListener { playRound() }
-        btnReset.setOnClickListener { resetGame() }
+        btnPlay.setOnClickListener {
+            it.animate().scaleX(0.95f).scaleY(0.95f).setDuration(80).withEndAction {
+                it.animate().scaleX(1f).scaleY(1f).setDuration(80).start()
+            }.start()
+            playRound()
+        }
+        btnReset.setOnClickListener {
+            it.animate().scaleX(0.95f).scaleY(0.95f).setDuration(80).withEndAction {
+                it.animate().scaleX(1f).scaleY(1f).setDuration(80).start()
+            }.start()
+            resetGame()
+        }
     }
 
     // ─── MediaPipe Hand Landmarker Setup ─── //
@@ -143,9 +184,9 @@ class MainActivity : AppCompatActivity() {
                 .setBaseOptions(baseOptions)
                 .setRunningMode(com.google.mediapipe.tasks.vision.core.RunningMode.LIVE_STREAM)
                 .setNumHands(1)
-                .setMinHandDetectionConfidence(0.5f)
-                .setMinHandPresenceConfidence(0.5f)
-                .setMinTrackingConfidence(0.5f)
+                .setMinHandDetectionConfidence(0.45f)
+                .setMinHandPresenceConfidence(0.45f)
+                .setMinTrackingConfidence(0.45f)
                 .setResultListener { result, _ ->
                     processHandResult(result)
                 }
@@ -165,20 +206,79 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processHandResult(result: HandLandmarkerResult) {
-        if (result.landmarks().isNotEmpty()) {
+        val newRawGesture = if (result.landmarks().isNotEmpty()) {
             val landmarks = result.landmarks()[0]
-            currentGesture = HandGestureClassifier.classify(landmarks)
+            HandGestureClassifier.classify(landmarks)
         } else {
-            currentGesture = HandGestureClassifier.Gesture.NONE
+            HandGestureClassifier.Gesture.NONE
         }
 
-        runOnUiThread {
-            tvGestureIcon.text = currentGesture.emoji
-            tvGestureLabel.text = if (currentGesture == HandGestureClassifier.Gesture.NONE) {
-                "No hand"
-            } else {
-                currentGesture.label
+        if (newRawGesture == rawGesture && newRawGesture != HandGestureClassifier.Gesture.NONE) {
+            gestureStreakCount++
+        } else if (newRawGesture == HandGestureClassifier.Gesture.NONE) {
+            gestureStreakCount++
+            if (gestureStreakCount >= 5) {
+                stableGesture = HandGestureClassifier.Gesture.NONE
+                gestureStreakCount = 0
             }
+            rawGesture = newRawGesture
+            runOnUiThread { updateGestureUI() }
+            return
+        } else {
+            gestureStreakCount = 1
+        }
+        rawGesture = newRawGesture
+
+        if (gestureStreakCount >= STABILIZE_FRAMES && stableGesture != rawGesture) {
+            stableGesture = rawGesture
+            gestureStreakCount = 0
+            runOnUiThread { updateGestureUI() }
+        } else {
+            runOnUiThread { updateGestureUI() }
+        }
+    }
+
+    private fun updateGestureUI() {
+        val gestureToShow = if (stableGesture != HandGestureClassifier.Gesture.NONE) stableGesture else rawGesture
+        tvGestureIcon.text = gestureToShow.emoji
+        tvGestureLabel.text = if (gestureToShow == HandGestureClassifier.Gesture.NONE) {
+            "No hand"
+        } else {
+            gestureToShow.label
+        }
+
+        // Hide hint once a gesture is detected
+        if (gestureToShow != HandGestureClassifier.Gesture.NONE) {
+            if (tvCameraHint.visibility == View.VISIBLE) {
+                tvCameraHint.animate().alpha(0f).setDuration(300).withEndAction {
+                    tvCameraHint.visibility = View.GONE
+                }.start()
+            }
+        }
+    }
+
+    // Play button: only 2 states — camera not ready (disabled) / camera ready (always enabled)
+    private fun updatePlayButtonState() {
+        if (!cameraReady) {
+            btnPlay.isEnabled = false
+            btnPlay.text = getString(R.string.starting_camera)
+            btnPlay.setTextColor(0x88FFFFFF.toInt())
+            btnPlay.setBackgroundResource(R.drawable.bg_gradient_button_disabled)
+            return
+        }
+
+        // Camera is ready → Play is ALWAYS enabled. No gesture gate!
+        btnPlay.isEnabled = true
+        btnPlay.text = getString(R.string.play_round_emoji)
+        btnPlay.setTextColor(ContextCompat.getColor(this, R.color.white))
+        btnPlay.setBackgroundResource(R.drawable.bg_gradient_button)
+
+        if (!isPlaying) {
+            btnPlay.animate().scaleX(1.03f).scaleY(1.03f).setDuration(400)
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .withEndAction {
+                    btnPlay.animate().scaleX(1f).scaleY(1f).setDuration(400).start()
+                }.start()
         }
     }
 
@@ -195,6 +295,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var frameTimestamp = 0L
+    private var lastAnalyzedTimestamp = 0L
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -202,22 +303,28 @@ class MainActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
-            // Preview
             val preview = Preview.Builder()
                 .build()
                 .also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
-            // Image analysis for MediaPipe
+            val resolutionSelector = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                    androidx.camera.core.resolutionselector.ResolutionStrategy(
+                        android.util.Size(640, 480),
+                        androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                    )
+                )
+                .build()
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .setResolutionSelector(resolutionSelector)
                 .build()
 
             imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                 analyzeFrame(imageProxy)
             }
 
-            // Front camera
             val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
             try {
@@ -226,7 +333,8 @@ class MainActivity : AppCompatActivity() {
                 Log.i(TAG, "Camera started successfully")
 
                 runOnUiThread {
-                    btnPlay.isEnabled = true
+                    cameraReady = true
+                    updatePlayButtonState()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Camera bind failed: ${e.message}", e)
@@ -240,11 +348,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val bitmap = imageProxy.toBitmap()
+        val now = System.currentTimeMillis()
+        if (now - lastAnalyzedTimestamp < FRAME_INTERVAL_MS) {
+            imageProxy.close()
+            return
+        }
+        lastAnalyzedTimestamp = now
+
+        val rawBitmap = imageProxy.toBitmap()
+        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+        val bitmap: Bitmap = if (rotationDegrees != 0) {
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, false)
+            rawBitmap.recycle()
+            rotated
+        } else {
+            rawBitmap
+        }
+
         val mpImage = BitmapImageBuilder(bitmap).build()
         val timestamp = System.currentTimeMillis()
 
-        // Ensure timestamps are strictly increasing
         val safeTimestamp = if (timestamp <= frameTimestamp) frameTimestamp + 1 else timestamp
         frameTimestamp = safeTimestamp
 
@@ -257,12 +381,69 @@ class MainActivity : AppCompatActivity() {
         imageProxy.close()
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (cameraReady) {
+            startCamera()
+        }
+    }
+
+    // ─── Haptic Feedback ─── //
+
+    private fun vibrateLight() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(30)
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun vibrateMedium() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(80)
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun vibrateStrong() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(150, 255))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(150)
+            }
+        } catch (_: Exception) { }
+    }
+
     // ─── Game Logic ─── //
 
     private fun playRound() {
         if (isPlaying) return
+
+        // NO gesture gate — game starts immediately!
+        // Snapshot current gesture as fallback (may be NONE — that's fine)
         isPlaying = true
+        isCountingDown = true
+        gestureAtPlayTap = when {
+            stableGesture != HandGestureClassifier.Gesture.NONE -> stableGesture
+            rawGesture != HandGestureClassifier.Gesture.NONE -> rawGesture
+            else -> null
+        }
+
         btnPlay.isEnabled = false
+        btnPlay.text = getString(R.string.play_round_emoji)
+        btnPlay.setBackgroundResource(R.drawable.bg_gradient_button_disabled)
+        btnPlay.setTextColor(0x88FFFFFF.toInt())
+        btnReset.isEnabled = false
+        btnReset.alpha = 0.5f
         resultPanel.visibility = View.GONE
 
         val aiMove = GameLogic.getAiMove()
@@ -275,18 +456,22 @@ class MainActivity : AppCompatActivity() {
 
         countdownOverlay.visibility = View.VISIBLE
         countdownOverlay.alpha = 0f
-        countdownOverlay.animate().alpha(1f).setDuration(200).start()
+        countdownOverlay.animate().alpha(1f).setDuration(200).setListener(null).start()
 
         tvCountdown.text = words[0]
         animateCountdownText()
+        vibrateLight()
 
-        // AI hand cycling
+        tvHoldGesture.visibility = View.VISIBLE
+        tvHoldGesture.alpha = 0f
+        tvHoldGesture.animate().alpha(0.9f).setDuration(300).setStartDelay(300).start()
+
         var cycleCount = 0
         val cycleRunnable = object : Runnable {
             override fun run() {
+                if (!isCountingDown) return
                 tvAiHand.text = aiCycleEmojis[cycleCount % aiCycleEmojis.size]
                 cycleCount++
-                // Shake animation
                 ObjectAnimator.ofFloat(tvAiHand, "translationY", 0f, -12f, 6f, -6f, 0f).apply {
                     duration = 250
                     start()
@@ -298,16 +483,26 @@ class MainActivity : AppCompatActivity() {
 
         val tick = object : Runnable {
             override fun run() {
+                if (!isCountingDown) return
                 step++
                 if (step < words.size) {
                     tvCountdown.text = words[step]
                     animateCountdownText()
-                    handler.postDelayed(this, 900)
+                    vibrateLight()
+                    handler.postDelayed(this, 800)
                 } else {
-                    // SHOOT!
                     handler.removeCallbacks(cycleRunnable)
+                    isCountingDown = false
 
-                    // Show AI's actual move
+                    // Capture gesture at SHOOT — best available, with Play-tap as final fallback
+                    capturedGesture = when {
+                        stableGesture != HandGestureClassifier.Gesture.NONE -> stableGesture
+                        rawGesture != HandGestureClassifier.Gesture.NONE -> rawGesture
+                        else -> gestureAtPlayTap
+                    }
+
+                    vibrateStrong()
+
                     tvAiHand.text = finalAiMove.emoji
                     ObjectAnimator.ofFloat(tvAiHand, "scaleX", 0.5f, 1.3f, 1f).apply {
                         duration = 400
@@ -323,6 +518,8 @@ class MainActivity : AppCompatActivity() {
                     tvCountdown.text = getString(R.string.shoot)
                     animateCountdownText()
 
+                    tvHoldGesture.animate().alpha(0f).setDuration(200).start()
+
                     handler.postDelayed({
                         countdownOverlay.animate()
                             .alpha(0f)
@@ -330,16 +527,17 @@ class MainActivity : AppCompatActivity() {
                             .setListener(object : AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: Animator) {
                                     countdownOverlay.visibility = View.GONE
+                                    countdownOverlay.animate().setListener(null)
                                     finishRound(finalAiMove)
                                 }
                             })
                             .start()
-                    }, 1200)
+                    }, 1000)
                 }
             }
         }
 
-        handler.postDelayed(tick, 900)
+        handler.postDelayed(tick, 800)
     }
 
     private fun animateCountdownText() {
@@ -356,39 +554,51 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun finishRound(aiMove: HandGestureClassifier.Gesture) {
-        val humanMove = if (currentGesture == HandGestureClassifier.Gesture.NONE) null else currentGesture
+        val humanMove = capturedGesture
+        capturedGesture = null
+        gestureAtPlayTap = null
 
         if (humanMove == null) {
-            // No gesture detected
             tvResultHumanEmoji.text = "❓"
             tvResultHumanGesture.text = "None"
             tvResultAiEmoji.text = "—"
             tvResultAiGesture.text = "—"
-            tvResultOutcome.text = getString(R.string.no_gesture)
+            tvResultOutcome.text = getString(R.string.no_gesture_hint)
             tvResultOutcome.setTextColor(ContextCompat.getColor(this, R.color.color_draw))
+            tvResultOutcome.textSize = 16f
             showResultPanel()
+
+            vibrateMedium()
+
             isPlaying = false
-            btnPlay.isEnabled = true
+            btnReset.isEnabled = true
+            btnReset.alpha = 1.0f
+            updatePlayButtonState()
             return
         }
 
         val result = GameLogic.determineWinner(humanMove, aiMove)
         showResult(humanMove, aiMove, result)
 
-        // Update scores
         when (result) {
             GameLogic.Result.WIN -> {
                 humanScore++
-                tvHumanScore.text = humanScore.toString()
+                animateScoreChange(tvHumanScore, humanScore)
+                flashCameraBorder(R.color.color_win_border)
+                vibrateStrong()
             }
             GameLogic.Result.LOSE -> {
                 aiScore++
-                tvAiScore.text = aiScore.toString()
+                animateScoreChange(tvAiScore, aiScore)
+                flashCameraBorder(R.color.color_lose_border)
+                vibrateMedium()
             }
-            else -> {}
+            GameLogic.Result.DRAW -> {
+                flashCameraBorder(R.color.color_draw_border)
+                vibrateLight()
+            }
         }
 
-        // Add log entry
         logAdapter.addEntry(GameLogic.LogEntry(roundNumber, humanMove, aiMove, result))
         tvLogEmpty.visibility = View.GONE
         rvLog.scrollToPosition(0)
@@ -397,7 +607,45 @@ class MainActivity : AppCompatActivity() {
         tvRoundNumber.text = roundNumber.toString()
 
         isPlaying = false
-        btnPlay.isEnabled = true
+        btnReset.isEnabled = true
+        btnReset.alpha = 1.0f
+        updatePlayButtonState()
+    }
+
+    private fun animateScoreChange(scoreView: TextView, newScore: Int) {
+        scoreView.text = newScore.toString()
+        scoreView.animate()
+            .scaleX(1.8f).scaleY(1.8f)
+            .setDuration(300)
+            .setInterpolator(OvershootInterpolator(5f))
+            .withEndAction {
+                scoreView.animate()
+                    .scaleX(1f).scaleY(1f)
+                    .setDuration(200)
+                    .start()
+            }
+            .start()
+    }
+
+    private fun flashCameraBorder(colorRes: Int) {
+        val flashColor = ContextCompat.getColor(this, colorRes)
+        val bg = cameraBorderFlash.background
+        if (bg is GradientDrawable) {
+            bg.setStroke(12, flashColor)
+        }
+
+        cameraBorderFlash.alpha = 0f
+        cameraBorderFlash.animate()
+            .alpha(1f)
+            .setDuration(200)
+            .withEndAction {
+                cameraBorderFlash.animate()
+                    .alpha(0f)
+                    .setDuration(800)
+                    .setStartDelay(400)
+                    .start()
+            }
+            .start()
     }
 
     private fun showResult(
@@ -409,6 +657,7 @@ class MainActivity : AppCompatActivity() {
         tvResultHumanGesture.text = humanMove.label
         tvResultAiEmoji.text = aiMove.emoji
         tvResultAiGesture.text = aiMove.label
+        tvResultOutcome.textSize = 24f
 
         when (result) {
             GameLogic.Result.WIN -> {
@@ -439,7 +688,6 @@ class MainActivity : AppCompatActivity() {
             .setInterpolator(AccelerateDecelerateInterpolator())
             .start()
 
-        // Bounce emojis
         listOf(tvResultHumanEmoji, tvResultAiEmoji).forEach { tv ->
             tv.scaleX = 0f
             tv.scaleY = 0f
@@ -453,19 +701,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetGame() {
+        isCountingDown = false
+        isPlaying = false
+
+        handler.removeCallbacksAndMessages(null)
+
+        countdownOverlay.animate().cancel()
+        countdownOverlay.animate().setListener(null)
+        cameraBorderFlash.animate().cancel()
+        tvHoldGesture.animate().cancel()
+        btnPlay.animate().cancel()
+
+        countdownOverlay.visibility = View.GONE
+        countdownOverlay.alpha = 0f
+        tvHoldGesture.visibility = View.GONE
+        cameraBorderFlash.alpha = 0f
+
         humanScore = 0
         aiScore = 0
         roundNumber = 1
+        capturedGesture = null
+        gestureAtPlayTap = null
         tvHumanScore.text = "0"
         tvAiScore.text = "0"
         tvRoundNumber.text = "1"
         resultPanel.visibility = View.GONE
-        logAdapter.clear()
+
+        if (logAdapter.itemCount > 0) {
+            logAdapter.clear()
+        }
+
         tvLogEmpty.visibility = View.VISIBLE
+        vibrateLight()
+        btnReset.isEnabled = true
+        btnReset.alpha = 1.0f
+        updatePlayButtonState()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
         handLandmarker?.close()
     }

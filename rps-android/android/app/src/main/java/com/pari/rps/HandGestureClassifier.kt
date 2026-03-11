@@ -13,9 +13,6 @@ import kotlin.math.abs
  *   9-12  – MIDDLE (MCP, PIP, DIP, TIP)
  *   13-16 – RING   (MCP, PIP, DIP, TIP)
  *   17-20 – PINKY  (MCP, PIP, DIP, TIP)
- *
- * A finger is "extended" when TIP.y < PIP.y (in normalized coords, Y=0 is top).
- * Thumb is extended when TIP.x is far from wrist relative to hand width.
  */
 object HandGestureClassifier {
 
@@ -29,30 +26,50 @@ object HandGestureClassifier {
     fun classify(landmarks: List<NormalizedLandmark>): Gesture {
         if (landmarks.size < 21) return Gesture.NONE
 
-        // Helper: is finger extended? (for index/middle/ring/pinky)
-        fun isExtended(tipIdx: Int, pipIdx: Int): Boolean =
-            landmarks[tipIdx].y() < landmarks[pipIdx].y()
+        // A finger is "extended" when:
+        //   TIP is above PIP  AND  TIP is above DIP
+        // Using both joints makes detection much more robust at different hand angles.
+        // "above" means smaller Y value (Y=0 is top of image).
+        fun isFingerExtended(tipIdx: Int, dipIdx: Int, pipIdx: Int, mcpIdx: Int): Boolean {
+            val tipY = landmarks[tipIdx].y()
+            val dipY = landmarks[dipIdx].y()
+            val pipY = landmarks[pipIdx].y()
+            val mcpY = landmarks[mcpIdx].y()
+            // Finger is extended if tip is clearly above PIP
+            // OR if tip is above DIP and DIP is above MCP (partially extended still counts)
+            return tipY < pipY && tipY < dipY ||
+                   tipY < mcpY && dipY < pipY
+        }
 
-        val indexUp = isExtended(8, 6)
-        val middleUp = isExtended(12, 10)
-        val ringUp = isExtended(16, 14)
-        val pinkyUp = isExtended(20, 18)
+        // A finger is "curled" when TIP is below PIP (tucked in)
+        fun isFingerCurled(tipIdx: Int, pipIdx: Int): Boolean {
+            return landmarks[tipIdx].y() > landmarks[pipIdx].y()
+        }
 
-        // Thumb: compare tip X distance from wrist vs MCP X distance from wrist
-        val thumbTipDist = abs(landmarks[4].x() - landmarks[0].x())
-        val thumbMcpDist = abs(landmarks[2].x() - landmarks[0].x())
-        val thumbUp = thumbTipDist > thumbMcpDist * 1.2f
+        val indexUp = isFingerExtended(8, 7, 6, 5)
+        val middleUp = isFingerExtended(12, 11, 10, 9)
+        val ringUp = isFingerExtended(16, 15, 14, 13)
+        val pinkyUp = isFingerExtended(20, 19, 18, 17)
+
+        val indexCurled = isFingerCurled(8, 6)
+        val middleCurled = isFingerCurled(12, 10)
+        val ringCurled = isFingerCurled(16, 14)
+        val pinkyCurled = isFingerCurled(20, 18)
 
         val extendedCount = listOf(indexUp, middleUp, ringUp, pinkyUp).count { it }
+        val curledCount = listOf(indexCurled, middleCurled, ringCurled, pinkyCurled).count { it }
 
-        // ✋ Paper – 3+ fingers extended (thumb may or may not be)
-        if (extendedCount >= 3 && (thumbUp || extendedCount == 4)) return Gesture.PAPER
+        // ✋ Paper – 3+ fingers extended
+        if (extendedCount >= 3) return Gesture.PAPER
 
-        // ✌️ Scissors – index + middle up, ring + pinky down
+        // ✌️ Scissors – index + middle up, ring + pinky NOT extended
         if (indexUp && middleUp && !ringUp && !pinkyUp) return Gesture.SCISSORS
 
-        // ✊ Rock – all 4 fingers curled (thumb ignored)
-        if (extendedCount <= 1 && !indexUp && !middleUp) return Gesture.ROCK
+        // ✊ Rock – at least 3 fingers curled, index and middle NOT extended
+        if (curledCount >= 3 && !indexUp && !middleUp) return Gesture.ROCK
+
+        // Fallback: if most fingers are curled, it's probably Rock
+        if (curledCount >= 2 && extendedCount <= 1 && !indexUp && !middleUp) return Gesture.ROCK
 
         return Gesture.NONE
     }

@@ -3,12 +3,15 @@ package com.pari.rps
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AlphaAnimation
+import android.view.animation.AnimationSet
+import android.view.animation.TranslateAnimation
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
 /**
- * RecyclerView adapter for match history log entries.
+ * RecyclerView adapter for match history log entries with slide-in animations.
  */
 class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
 
@@ -20,9 +23,8 @@ class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
     }
 
     fun clear() {
-        val size = entries.size
         entries.clear()
-        notifyItemRangeRemoved(0, size)
+        notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LogViewHolder {
@@ -33,6 +35,18 @@ class LogAdapter : RecyclerView.Adapter<LogAdapter.LogViewHolder>() {
 
     override fun onBindViewHolder(holder: LogViewHolder, position: Int) {
         holder.bind(entries[position])
+
+        // Slide-in + fade animation for recently added items
+        if (position == 0) {
+            val animSet = AnimationSet(true)
+            animSet.addAnimation(TranslateAnimation(0f, 0f, -40f, 0f).apply {
+                duration = 300
+            })
+            animSet.addAnimation(AlphaAnimation(0f, 1f).apply {
+                duration = 300
+            })
+            holder.itemView.startAnimation(animSet)
+        }
     }
 
     override fun getItemCount(): Int = entries.size

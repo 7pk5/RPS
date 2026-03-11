@@ -1,43 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Primary Dark Background -->
-    <color name="bg_primary">#FF0A0E17</color>
-    <color name="bg_secondary">#FF111827</color>
+    <!-- Candy Theme Background -->
+    <color name="bg_primary">#FFF9E8FF</color>
+    <color name="bg_gradient_start">#FFFCE4EC</color>
+    <color name="bg_gradient_end">#FFE8EAF6</color>
 
     <!-- Surface -->
-    <color name="surface">#0AFFFFFF</color>
-    <color name="surface_hover">#14FFFFFF</color>
+    <color name="surface">#EEFFFFFF</color>
+    <color name="surface_card">#F5FFFFFF</color>
 
     <!-- Glass -->
-    <color name="glass_bg">#A6111827</color>
-    <color name="glass_border">#14FFFFFF</color>
+    <color name="glass_bg">#DDFFFFFF</color>
+    <color name="glass_border">#33FF6B9D</color>
 
     <!-- Text -->
-    <color name="text_primary">#FFF0F4F8</color>
-    <color name="text_secondary">#FF94A3B8</color>
-    <color name="text_muted">#FF64748B</color>
+    <color name="text_primary">#FF4A1A6B</color>
+    <color name="text_secondary">#FF7C3AED</color>
+    <color name="text_muted">#FF9CA3AF</color>
 
-    <!-- Accent Colors -->
+    <!-- Accent Colors (Candy &amp; Playful) -->
+    <color name="accent_primary">#FFFF6B9D</color>
+    <color name="accent_secondary">#FF7C3AED</color>
+    <color name="accent_yellow">#FFFBBF24</color>
+    <color name="accent_orange">#FFFF8A50</color>
+    <color name="accent_teal">#FF2DD4BF</color>
     <color name="accent_indigo">#FF6366F1</color>
-    <color name="accent_violet">#FF8B5CF6</color>
-    <color name="accent_pink">#FFEC4899</color>
+    <color name="accent_violet">#FF9333EA</color>
+    <color name="accent_pink">#FFE11D48</color>
 
     <!-- Game Result Colors -->
-    <color name="color_win">#FF22D3EE</color>
-    <color name="color_lose">#FFF43F5E</color>
-    <color name="color_draw">#FFFACC15</color>
+    <color name="color_win">#FF10B981</color>
+    <color name="color_lose">#FFEF4444</color>
+    <color name="color_draw">#FFF59E0B</color>
 
-    <!-- Material Theme colors -->
-    <color name="md_theme_dark_primary">#FF6366F1</color>
+    <!-- Semi-transparent result colors (border flash) -->
+    <color name="color_win_border">#BB10B981</color>
+    <color name="color_lose_border">#BBEF4444</color>
+    <color name="color_draw_border">#BBF59E0B</color>
+
+    <!-- Button -->
+    <color name="btn_play_start">#FFFF6B9D</color>
+    <color name="btn_play_center">#FFFF8A50</color>
+    <color name="btn_play_end">#FFFBBF24</color>
+    <color name="btn_disabled">#FFE5E7EB</color>
+
+    <!-- Camera -->
+    <color name="camera_bg">#FF1E1B4B</color>
+    <color name="camera_border">#FFFF6B9D</color>
+
+    <!-- Material Theme -->
+    <color name="md_theme_dark_primary">#FFFF6B9D</color>
     <color name="md_theme_dark_onPrimary">#FFFFFFFF</color>
-    <color name="md_theme_dark_primaryContainer">#FF3730A3</color>
-    <color name="md_theme_dark_background">#FF0A0E17</color>
-    <color name="md_theme_dark_surface">#FF111827</color>
-    <color name="md_theme_dark_onBackground">#FFF0F4F8</color>
-    <color name="md_theme_dark_onSurface">#FFF0F4F8</color>
+    <color name="md_theme_dark_primaryContainer">#FFF9E8FF</color>
+    <color name="md_theme_dark_background">#FFF9E8FF</color>
+    <color name="md_theme_dark_surface">#FFFFFFFF</color>
+    <color name="md_theme_dark_onBackground">#FF4A1A6B</color>
+    <color name="md_theme_dark_onSurface">#FF4A1A6B</color>
 
     <!-- Status bar -->
-    <color name="status_bar">#FF060911</color>
+    <color name="status_bar">#FFCE93D8</color>
 
     <!-- White/Black -->
     <color name="white">#FFFFFFFF</color>
